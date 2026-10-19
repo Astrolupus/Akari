@@ -259,7 +259,7 @@ async function catalog() {
       license: m.license || null,
       episodes: [...m.episodes].sort((x, y) => x.number - y.number).map((e) => ({
         number: e.number, title: e.title || null, src: r(e.src), duration: e.duration || null,
-        thumbnail: r(e.thumbnail), intro: e.intro || null,
+        thumbnail: r(e.thumbnail), intro: e.intro || null, released: e.released || null,
         subtitles: (e.subtitles || []).map((t) => ({ lang: t.lang || 'und', label: t.label || t.lang || 'Subtitles', src: r(t.src), default: Boolean(t.default) })),
       })),
     };
@@ -495,7 +495,13 @@ const routes = [
     let onList = [];
     try { onList = await anilistOpenEntries(); } catch (e) { console.warn('[anilist list]', e.message); }
     return {
-      shows: shows.map(({ episodes, ...s }) => ({ ...s, episodeCount: episodes.length, firstEpisode: episodes[0]?.number ?? 1 })),
+      shows: shows.map(({ episodes, ...s }) => ({
+      ...s,
+      episodeCount: episodes.length,
+      episodeNumbers: episodes.map((e) => e.number),
+      firstEpisode: episodes[0]?.number ?? 1,
+      releases: episodes.filter((e) => e.released).map(({ number, title, released, thumbnail }) => ({ number, title, released, thumbnail })),
+    })),
       sources: (await allSources()).map(publicView),
       progress: progressStore(),
       onList,

@@ -30,7 +30,13 @@ router.get('/api/catalog', async (req, res) => {
   let onList = [];
   try { onList = await trackers.anilistOpenEntries(); } catch (e) { console.warn('[anilist list]', e.message); }
   json(res, 200, {
-    shows: shows.map(({ episodes, ...s }) => ({ ...s, episodeCount: episodes.length, firstEpisode: episodes[0]?.number ?? 1 })),
+    shows: shows.map(({ episodes, ...s }) => ({
+      ...s,
+      episodeCount: episodes.length,
+      episodeNumbers: episodes.map((e) => e.number),
+      firstEpisode: episodes[0]?.number ?? 1,
+      releases: episodes.filter((e) => e.released).map(({ number, title, released, thumbnail }) => ({ number, title, released, thumbnail })),
+    })),
     sources: sources.list().map(sources.publicView),
     progress,
     onList,

@@ -10,8 +10,10 @@ fs.mkdirSync(out, { recursive: true });
 fs.cpSync('public', out, { recursive: true });
 fs.copyFileSync('web/static-backend.js', path.join(out, 'static-backend.js'));
 fs.copyFileSync('lib/manifest.js', path.join(out, 'manifest.js'));
-fs.mkdirSync(path.join(out, 'local/sample'), { recursive: true });
-fs.copyFileSync('sources/sample/anime-source.json', path.join(out, 'local/sample/anime-source.json'));
+if (process.env.ENABLE_SAMPLE === 'true') {
+  fs.mkdirSync(path.join(out, 'local/sample'), { recursive: true });
+  fs.copyFileSync('sources/sample/anime-source.json', path.join(out, 'local/sample/anime-source.json'));
+}
 
 // Optional: bake in an AniList client ID so visitors don't have to enter one.
 const clientId = process.env.ANILIST_CLIENT_ID_WEB || '';

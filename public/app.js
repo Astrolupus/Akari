@@ -1,4 +1,5 @@
-// Akari front end: a small hash-routed app with no build step.
+// Akari front end: hash-routed, no build step.
+// Tabs: Library · Updates · History · Browse · More
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const view = (html) => { $('#view').innerHTML = html; };
@@ -7,6 +8,12 @@ const enc = encodeURIComponent;
 
 const STATUS_LABEL = { watching: 'Watching', planning: 'Plan to watch', completed: 'Completed', paused: 'Paused', dropped: 'Dropped' };
 const TRACKER_NAME = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
+const CHEVRON = '<svg class="chev" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="2"/></svg>';
+const ICON = {
+  refresh: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17.7 6.3A8 8 0 104 12h2a6 6 0 1110.3-4.2L13 11h7V4z" fill="currentColor"/></svg>',
+  remove: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 7h12l-1 13H7zM9 4h6l1 2H8z" fill="currentColor"/></svg>',
+  play: '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5l11 7-11 7z" fill="currentColor"/></svg>',
+};
 
 // The GitHub Pages build sets AKARI_STATIC and answers /api routes in the browser.
 const STATIC = window.AKARI_STATIC === true;
@@ -32,36 +39,68 @@ function toast(msg, kind = '') {
   setTimeout(() => el.remove(), kind === 'error' ? 8000 : 4500);
 }
 
+const pref = {
+  get(k, d) { try { return localStorage.getItem(`akari:pref:${k}`) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(`akari:pref:${k}`, v); } catch { /* optional */ } },
+};
+
 const fmt = (sec) => {
   if (!Number.isFinite(sec) || sec <= 0) return '';
   sec = Math.round(sec);
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 };
-const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
-const epCode = (n) => `E${String(n).padStart(2, '0')}`;
+const minutes = (sec) => (Number.isFinite(sec) && sec > 0 ? `${Math.max(1, Math.round(sec / 60))}m` : '');
+const plural = (n, word) => `${n} ${word}${n === 1 || word.endsWith('s') ? '' : 's'}`;
+const epCode = (n) => `E${n}`;
 const hue = (t) => [...String(t)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 360;
 const safeColor = (c) => (/^#[0-9a-f]{3,8}$/i.test(c || '') ? c : 'var(--panel-2)');
 const cssUrl = (u) => `url("${String(u).replace(/["\\\n]/g, '')}")`;
 const showHref = (s) => `#/show/${enc(s.key)}`;
 const watchHref = (key, n) => `#/watch/${enc(key)}/${n}`;
 
-function poster(s) {
+function poster(s, cls = 'poster') {
   return s.cover
-    ? `<img class="poster" src="${esc(s.cover)}" alt="" loading="lazy" style="background:${safeColor(s.color)}">`
-    : `<div class="poster poster-gen" style="--h:${hue(s.title)}" aria-hidden="true"><span>${esc(s.title)}</span></div>`;
+    ? `<img class="${cls}" src="${esc(s.cover)}" alt="" loading="lazy" style="background:${safeColor(s.color)}">`
+    : `<div class="${cls} poster-gen" style="--h:${hue(s.title)}" aria-hidden="true"><span>${esc(s.title)}</span></div>`;
 }
 
-function metaLine(s, extra = '') {
+function metaLine(s) {
   const bits = [
     s.format && esc(String(s.format).replace(/_/g, ' ')),
     s.year && `<span class="mono">${s.year}</span>`,
-    s.totalEpisodes ? `<span class="mono">${s.totalEpisodes}</span> episode${s.totalEpisodes === 1 ? '' : 's'}` : s.episodeCount ? `<span class="mono">${s.episodeCount}</span> available` : '',
+    s.totalEpisodes ? plural(s.totalEpisodes, 'episode') : s.episodeCount ? `${s.episodeCount} available` : '',
     s.studio && esc(s.studio),
-    s.score && `<span class="score mono">${s.score}%</span>`,
+    s.score && `<span class="score">${s.score}%</span>`,
   ].filter(Boolean);
-  return `<div class="meta-line">${bits.map((b) => `<span>${b}</span>`).join('')}${extra}</div>`;
+  return `<div class="meta-line">${bits.map((b) => `<span>${b}</span>`).join('<span aria-hidden="true">·</span>')}</div>`;
 }
+
+function dayLabel(iso) {
+  const d = new Date(iso);
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const that = new Date(d); that.setHours(0, 0, 0, 0);
+  const diff = Math.round((today - that) / 86400e3);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  if (diff > 1 && diff < 7) return d.toLocaleDateString(undefined, { weekday: 'long' });
+  return d.toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: d.getFullYear() === today.getFullYear() ? undefined : 'numeric' });
+}
+function groupBy(items, keyFn) {
+  const out = new Map();
+  for (const it of items) {
+    const k = keyFn(it);
+    if (!out.has(k)) out.set(k, []);
+    out.get(k).push(it);
+  }
+  return out;
+}
+
+const emptyState = (glyph, title, body, action = '') =>
+  `<div class="empty"><div class="glyph" aria-hidden="true">${glyph}</div><h2>${title}</h2><p>${body}</p>${action}</div>`;
+const NO_REPOS = emptyState('(｡•́︿•̀｡)', 'Your library is empty',
+  'Add a GitHub repository with an <code>anime-source.json</code> file and its shows appear here.',
+  '<a class="btn primary" href="#/browse/repos">Add a repository</a>');
 
 // ---------------- Data ----------------
 let catalog = null;
@@ -70,14 +109,30 @@ async function loadCatalog(force = false) {
   return catalog;
 }
 
+function watchState(show, p) {
+  const nums = show.episodeNumbers || [];
+  const watched = new Set((p?.watched || []).filter((n) => nums.includes(n)));
+  const unwatched = nums.length - watched.size;
+  const status = !p ? 'new' : unwatched === 0 ? 'completed' : 'watching';
+  const next = nums.find((n) => !watched.has(n)) ?? nums[0] ?? show.firstEpisode;
+  return { watched, unwatched, status, next };
+}
+
 // ---------------- Router ----------------
 let teardown = null;
 const routes = [
-  [/^#?\/?$/, home],
-  [/^#\/show\/([^/]+)$/, showPage],
-  [/^#\/watch\/([^/]+)\/([\d.]+)$/, watchPage],
-  [/^#\/search\/?(.*)$/, searchPage],
-  [/^#\/settings$/, settingsPage],
+  [/^#?\/?$/, libraryPage, 'library'],
+  [/^#\/updates$/, updatesPage, 'updates'],
+  [/^#\/history$/, historyPage, 'history'],
+  [/^#\/browse$/, browseSourcesPage, 'browse'],
+  [/^#\/browse\/repos$/, browseReposPage, 'browse'],
+  [/^#\/source\/([^/]+)$/, sourcePage, 'browse'],
+  [/^#\/more$/, morePage, 'more'],
+  [/^#\/(?:more\/trackers|settings)$/, trackersPage, 'more'],
+  [/^#\/more\/about$/, aboutPage, 'more'],
+  [/^#\/show\/([^/]+)$/, showPage, 'library'],
+  [/^#\/watch\/([^/]+)\/([\d.]+)$/, watchPage, 'library'],
+  [/^#\/search\/?(.*)$/, searchPage, 'library'],
 ];
 
 async function route() {
@@ -85,7 +140,7 @@ async function route() {
   if (STATIC && /access_token=/.test(location.hash)) {
     // AniList's browser sign-in returns the token in the URL fragment.
     const fragment = location.hash;
-    history.replaceState(null, '', `${location.pathname}#/settings`);
+    history.replaceState(null, '', `${location.pathname}#/more/trackers`);
     try {
       await backend.finishAniListSignIn(fragment);
       toast('Connected AniList.', 'ok');
@@ -94,99 +149,357 @@ async function route() {
     }
   }
   const h = location.hash || '#/';
-  $$('[data-nav]').forEach((a) => a.removeAttribute('aria-current'));
-  $(`[data-nav="${h.startsWith('#/settings') ? 'settings' : 'home'}"]`)?.setAttribute('aria-current', 'page');
-  for (const [re, fn] of routes) {
+  for (const [re, fn, tab] of routes) {
     const m = h.match(re);
     if (!m) continue;
+    $$('[data-nav]').forEach((a) => (a.dataset.nav === tab ? a.setAttribute('aria-current', 'page') : a.removeAttribute('aria-current')));
+    document.title = 'Akari';
     view('<div class="loading">Loading…</div>');
     try {
       await fn(...m.slice(1).map((x) => decodeURIComponent(x || '')));
     } catch (e) {
-      view(`<div class="wrap"><div class="notice error">${esc(e.message)}</div><a class="btn" href="#/">Back to library</a></div>`);
+      view(`<div class="wrap"><div class="notice error">${esc(e.message)}</div><a class="btn quiet" href="#/">Back to library</a></div>`);
     }
     window.scrollTo(0, 0);
     return;
   }
-  view('<div class="wrap empty"><h1>Page not found</h1><a class="btn" href="#/">Back to library</a></div>');
+  view(`<div class="wrap">${emptyState('404', 'Page not found', 'That address does not match anything in Akari.', '<a class="btn quiet" href="#/">Back to library</a>')}</div>`);
 }
 window.addEventListener('hashchange', route);
 
-// ---------------- Home ----------------
-function continueItems(c) {
-  const byKey = new Map(c.shows.map((s) => [s.key, s]));
-  return Object.entries(c.progress)
-    .filter(([k]) => byKey.has(k))
-    .sort((a, b) => (b[1].updatedAt || '').localeCompare(a[1].updatedAt || ''))
-    .map(([k, p]) => ({ show: byKey.get(k), p }))
-    .filter(({ show, p }) => !(p.watched?.includes(p.ep) && p.ep >= show.episodeCount && p.position >= (p.duration || 1) * 0.85));
-}
+// ---------------- Library ----------------
+const LIB_TABS = [['all', 'All'], ['watching', 'Watching'], ['new', 'Not started'], ['completed', 'Completed']];
+const SORTS = [['recent', 'Last watched'], ['title', 'Title'], ['unwatched', 'Unwatched episodes'], ['source', 'Source']];
 
-async function home() {
+async function libraryPage() {
   const c = await loadCatalog(true);
-  if (!c.shows.length) {
-    view(`<div class="wrap empty">
-      <span class="eyebrow">Library is empty</span>
-      <h1>Connect a GitHub repo to fill your library</h1>
-      <p>Akari reads an <code>anime-source.json</code> file from each repo you add and builds your catalog from it. Titles, art and synopses come from AniList.</p>
-      <a class="btn primary" href="#/settings">Add a repo</a>
-    </div>`);
-    return;
-  }
+  if (!c.shows.length) { view(`<div class="wrap">${NO_REPOS}</div>`); return; }
 
-  const cont = continueItems(c);
-  const featured = cont[0]?.show || c.shows.find((s) => s.banner) || c.shows[0];
-  const fp = c.progress[featured.key];
-  const resumeEp = fp?.ep ?? featured.firstEpisode;
-  const left = fp?.duration ? fp.duration - fp.position : 0;
-  const playLabel = fp && left > 30 ? `Resume ${epCode(resumeEp)} · ${fmt(left)} left` : `Play ${epCode(resumeEp)}`;
+  const rows = c.shows.map((s) => ({ s, p: c.progress[s.key], w: watchState(s, c.progress[s.key]) }));
+  const recent = rows.filter((r) => r.p).sort((a, b) => (b.p.updatedAt || '').localeCompare(a.p.updatedAt || ''));
+  const resume = recent.find((r) => r.w.status === 'watching');
 
-  const onListIds = new Map(c.onList.map((e) => [e.anilistId, e]));
-  const onList = c.shows.filter((s) => s.ids.anilist && onListIds.has(s.ids.anilist));
-
-  const shelf = (title, sub, items, wide = false) => items.length ? `
-    <section aria-label="${esc(title)}">
-      <div class="shelf-head"><h2>${esc(title)}</h2>${sub ? `<span class="eyebrow">${sub}</span>` : ''}</div>
-      <div class="row${wide ? ' wide' : ''}">${items.join('')}</div>
-    </section>` : '';
-
-  const card = (s, sub) => `<a class="card" href="${showHref(s)}">${poster(s)}<span class="title">${esc(s.title)}</span><span class="sub">${sub ?? esc([s.year, s.genres?.slice(0, 2).join(' · ')].filter(Boolean).join(' · '))}</span></a>`;
-  const contCard = ({ show: s, p }) => {
-    const pct = p.duration ? Math.min(100, (p.position / p.duration) * 100) : 0;
-    return `<a class="card" href="${watchHref(s.key, p.ep)}">
-      <div class="still" style="background-image:${s.banner ? cssUrl(s.banner) : 'none'};background-color:${safeColor(s.color)}">
-        <span class="ep-badge">${epCode(p.ep)}</span><span class="bar"><i style="width:${pct.toFixed(1)}%"></i></span>
-      </div>
-      <span class="title">${esc(s.title)}</span>
-      <span class="sub mono">${p.duration ? `${fmt(p.duration - p.position)} left` : 'Started'}</span></a>`;
-  };
-
-  const bySource = c.sources.filter((src) => src.shows).map((src) =>
-    shelf(src.name, esc(src.repo ? `github.com/${src.repo}` : 'Bundled sample'), c.shows.filter((s) => s.sourceId === src.id).map((s) => card(s))));
-
-  view(`
-    <section class="hero">
-      <div class="hero-art" style="background-image:${featured.banner ? cssUrl(featured.banner) : 'none'};background-color:${safeColor(featured.color)}"></div>
+  const hero = resume ? (() => {
+    const { s, p, w } = resume;
+    const sameEp = p.ep === w.next && p.duration;
+    const pct = sameEp ? Math.min(100, (p.position / p.duration) * 100) : 0;
+    return `<section class="hero" aria-label="Continue watching">
+      <div class="hero-art" style="background-image:${s.banner ? cssUrl(s.banner) : 'none'};background-color:${safeColor(s.color)}"></div>
       <div class="wrap"><div class="hero-body">
-        <span class="eyebrow">${cont[0] ? 'Continue watching' : `From ${esc(featured.sourceLabel)}`}</span>
-        <h1>${esc(featured.title)}</h1>
-        ${featured.titleNative ? `<div class="native">${esc(featured.titleNative)}</div>` : ''}
-        ${metaLine(featured)}
-        ${featured.synopsis ? `<p>${esc(featured.synopsis)}</p>` : ''}
+        <span class="eyebrow">Continue watching</span>
+        <h1>${esc(s.title)}</h1>
+        ${metaLine(s)}
+        ${s.synopsis ? `<p>${esc(s.synopsis)}</p>` : ''}
+        ${pct ? `<div class="progressline"><i style="width:${pct.toFixed(1)}%"></i></div>` : ''}
         <div class="actions">
-          <a class="btn primary" href="${watchHref(featured.key, resumeEp)}"><span class="play-glyph" aria-hidden="true"></span>${playLabel}</a>
-          <a class="btn ghost" href="${showHref(featured)}">Episodes and details</a>
+          <a class="btn primary" href="${watchHref(s.key, w.next)}"><span class="play-glyph" aria-hidden="true"></span>${sameEp ? `Continue ${epCode(w.next)}` : `Watch ${epCode(w.next)}`}</a>
+          <a class="btn quiet" href="${showHref(s)}">Series details</a>
         </div>
       </div></div>
-    </section>
-    <div class="wrap shelves">
-      ${shelf('Continue watching', '', cont.slice(0, 12).map(contCard), true)}
-      ${shelf('On your AniList', 'watching, paused or planned', onList.map((s) => {
-        const e = onListIds.get(s.ids.anilist);
-        return card(s, `${STATUS_LABEL[e.status]} · ${e.progress}/${s.totalEpisodes || '?'}`);
-      }))}
-      ${bySource.join('')}
-    </div>`);
+    </section>`;
+  })() : '';
+
+  let tab = pref.get('lib-tab', 'all');
+  let sort = pref.get('lib-sort', 'recent');
+  const counts = Object.fromEntries(LIB_TABS.map(([k]) => [k, k === 'all' ? rows.length : rows.filter((r) => r.w.status === k).length]));
+
+  view(`${hero}<div class="wrap">
+    <div class="page-head"><h1>Library</h1></div>
+    <div class="subtabs" role="tablist" aria-label="Library categories">
+      ${LIB_TABS.map(([k, l]) => `<button role="tab" type="button" data-tab="${k}" aria-selected="${k === tab}">${l}<span class="count">${counts[k]}</span></button>`).join('')}
+    </div>
+    <div class="toolbar">
+      <span id="lib-count"></span>
+      <label>Sort <select id="lib-sort">${SORTS.map(([k, l]) => `<option value="${k}" ${k === sort ? 'selected' : ''}>${l}</option>`).join('')}</select></label>
+    </div>
+    <div class="grid" id="lib-grid"></div>
+  </div>`);
+
+  const paint = () => {
+    let list = rows.filter((r) => tab === 'all' || r.w.status === tab);
+    const by = {
+      recent: (a, b) => (b.p?.updatedAt || '').localeCompare(a.p?.updatedAt || '') || a.s.title.localeCompare(b.s.title),
+      title: (a, b) => a.s.title.localeCompare(b.s.title),
+      unwatched: (a, b) => b.w.unwatched - a.w.unwatched || a.s.title.localeCompare(b.s.title),
+      source: (a, b) => a.s.sourceLabel.localeCompare(b.s.sourceLabel) || a.s.title.localeCompare(b.s.title),
+    }[sort];
+    list = list.sort(by);
+    $('#lib-count').textContent = `${list.length} series`;
+    $('#lib-grid').innerHTML = list.length ? list.map(({ s, p, w }) => {
+      const pct = p?.duration && p.ep === w.next ? Math.min(100, (p.position / p.duration) * 100) : 0;
+      const badge = w.status === 'completed' ? '<span class="badge done" title="All watched">✓</span>'
+        : w.unwatched ? `<span class="badge" title="${plural(w.unwatched, 'unwatched episode')}">${w.unwatched}</span>` : '';
+      return `<a class="card" href="${showHref(s)}">
+        <div class="art">${poster(s)}${badge}${pct ? `<span class="bar"><i style="width:${pct.toFixed(1)}%"></i></span>` : ''}</div>
+        <span class="title">${esc(s.title)}</span>
+        <span class="sub">${esc(s.sourceLabel)}</span></a>`;
+    }).join('') : `<div style="grid-column:1/-1">${emptyState('—', 'Nothing here yet', tab === 'completed' ? 'Series you finish move here.' : tab === 'watching' ? 'Start an episode and the series shows up here.' : 'Every series has been started.')}</div>`;
+  };
+  paint();
+  $$('[data-tab]').forEach((b) => b.addEventListener('click', () => {
+    tab = b.dataset.tab; pref.set('lib-tab', tab);
+    $$('[data-tab]').forEach((x) => x.setAttribute('aria-selected', String(x === b)));
+    paint();
+  }));
+  $('#lib-sort').addEventListener('change', (e) => { sort = e.target.value; pref.set('lib-sort', sort); paint(); });
+}
+
+// ---------------- Updates ----------------
+async function updatesPage() {
+  const c = await loadCatalog(true);
+  const items = c.shows.flatMap((s) => (s.releases || []).map((e) => ({ s, e, watched: c.progress[s.key]?.watched?.includes(e.number) })))
+    .filter((x) => Date.parse(x.e.released) <= Date.now() + 86400e3)
+    .sort((a, b) => Date.parse(b.e.released) - Date.parse(a.e.released))
+    .slice(0, 200);
+  const body = !c.shows.length ? NO_REPOS
+    : !items.length ? emptyState('( ˘ω˘ )', 'No new episodes', 'Episodes show up here when a repository gives them a <code>released</code> date.')
+      : [...groupBy(items, (x) => dayLabel(x.e.released))].map(([label, list]) => `
+        <div class="group-label">${esc(label)}</div>
+        <div class="list">${list.map(({ s, e, watched }) => `
+          <a class="row" href="${watchHref(s.key, e.number)}">
+            ${poster(s, 'thumb')}
+            <span class="main"><span class="name">${esc(s.title)}</span>
+              <span class="detail"><b>${epCode(e.number)}</b>${e.title ? ` · ${esc(e.title)}` : ''}${watched ? ' · Watched' : ''}</span></span>
+            <span class="end"><span class="icon-btn" aria-hidden="true">${ICON.play}</span></span>
+          </a>`).join('')}</div>`).join('');
+  view(`<div class="wrap"><div class="page-head"><h1>Updates</h1></div>${body}<div style="height:48px"></div></div>`);
+}
+
+// ---------------- History ----------------
+async function historyPage() {
+  const c = await loadCatalog(true);
+  const byKey = new Map(c.shows.map((s) => [s.key, s]));
+  const items = Object.entries(c.progress).filter(([k, p]) => byKey.has(k) && p.updatedAt)
+    .map(([k, p]) => ({ s: byKey.get(k), p }))
+    .sort((a, b) => b.p.updatedAt.localeCompare(a.p.updatedAt));
+  const body = !items.length ? emptyState('(・_・;)', 'Nothing watched yet', 'Episodes you start appear here, newest first.')
+    : [...groupBy(items, (x) => dayLabel(x.p.updatedAt))].map(([label, list]) => `
+      <div class="group-label">${esc(label)}</div>
+      <div class="list">${list.map(({ s, p }) => {
+        const left = p.duration ? p.duration - p.position : 0;
+        const done = p.watched?.includes(p.ep);
+        return `<div class="row">
+          <a href="${showHref(s)}" tabindex="-1" aria-hidden="true">${poster(s, 'thumb')}</a>
+          <a class="main" href="${watchHref(s.key, p.ep)}" style="text-decoration:none">
+            <span class="name">${esc(s.title)}</span>
+            <span class="detail"><b>${epCode(p.ep)}</b> · ${done ? 'Watched' : left > 5 ? `${fmt(left)} left` : 'Started'} · ${new Date(p.updatedAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}</span>
+          </a>
+          <span class="end">
+            <a class="icon-btn" href="${watchHref(s.key, p.ep)}" aria-label="Resume ${esc(s.title)}">${ICON.play}</a>
+            <button class="icon-btn" type="button" data-forget="${esc(s.key)}" aria-label="Remove ${esc(s.title)} from history">${ICON.remove}</button>
+          </span>
+        </div>`;
+      }).join('')}</div>`).join('');
+  view(`<div class="wrap"><div class="page-head"><h1>History</h1></div>${body}<div style="height:48px"></div></div>`);
+  $$('[data-forget]').forEach((b) => b.addEventListener('click', async () => {
+    await api(`/api/progress/${enc(b.dataset.forget)}`, { method: 'DELETE' });
+    toast('Removed from history. Your tracker lists were not changed.');
+    route();
+  }));
+}
+
+// ---------------- Browse ----------------
+const browseTabs = (active) => `<div class="subtabs">
+  <a href="#/browse" ${active === 'sources' ? 'aria-current="page"' : ''}>Sources</a>
+  <a href="#/browse/repos" ${active === 'repos' ? 'aria-current="page"' : ''}>Repositories</a>
+</div>`;
+
+async function browseSourcesPage() {
+  const srcs = await api('/api/sources');
+  const body = !srcs.length ? NO_REPOS : `<div class="list" style="margin-top:8px">${srcs.map((s) => `
+    <a class="row icon-row" href="#/source/${enc(s.id)}">
+      <span class="avatar" style="--h:${hue(s.name)}" aria-hidden="true">${esc(s.name.trim()[0]?.toUpperCase() || '?')}</span>
+      <span class="main"><span class="name">${esc(s.name)}</span>
+        <span class="detail">${s.repo ? esc(s.repo) : 'Bundled'} · ${plural(s.shows, 'series')} · ${plural(s.episodes, 'episode')}${s.error ? ' · <b style="color:var(--bad)">update failed</b>' : ''}</span></span>
+      <span class="end">${CHEVRON}</span>
+    </a>`).join('')}</div>`;
+  view(`<div class="wrap"><div class="page-head"><h1>Browse</h1></div>${browseTabs('sources')}${body}<div style="height:48px"></div></div>`);
+}
+
+async function sourcePage(id) {
+  const c = await loadCatalog(true);
+  const src = c.sources.find((s) => s.id === id);
+  if (!src) throw new Error('That repository is not in Akari anymore.');
+  const shows = c.shows.filter((s) => s.sourceId === id);
+  document.title = `${src.name} · Akari`;
+  view(`<div class="wrap">
+    <div class="page-head"><div style="display:grid;gap:4px"><a class="eyebrow" href="#/browse" style="text-decoration:none">← Browse</a><h1>${esc(src.name)}</h1>
+      ${src.description ? `<p>${esc(src.description)}</p>` : ''}</div>
+      ${src.url ? `<a class="btn quiet small" href="${esc(src.url)}" target="_blank" rel="noopener">View on GitHub</a>` : ''}</div>
+    <div class="grid">${shows.map((s) => `<a class="card" href="${showHref(s)}"><div class="art">${poster(s)}</div><span class="title">${esc(s.title)}</span><span class="sub">${esc([s.year, s.genres?.[0]].filter(Boolean).join(' · '))}</span></a>`).join('')}</div>
+  </div>`);
+}
+
+async function browseReposPage() {
+  const srcs = await api('/api/sources');
+  const repoRow = (s) => `<div class="row icon-row">
+    <span class="avatar" style="--h:${hue(s.name)}" aria-hidden="true">${esc(s.name.trim()[0]?.toUpperCase() || '?')}</span>
+    <span class="main"><span class="name">${esc(s.name)}</span>
+      <span class="detail">${s.repo ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.repo)}</a> · ${esc(s.ref)}` : 'Bundled with Akari'}${s.fetchedAt ? ` · checked ${new Date(s.fetchedAt).toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })}` : ''}</span>
+      ${s.error ? `<span class="err">${esc(s.error)} Showing the last version that loaded.</span>` : ''}</span>
+    <span class="end">${s.kind === 'github' ? `
+      <button class="icon-btn" type="button" data-refresh="${esc(s.id)}" aria-label="Refresh ${esc(s.repo)}">${ICON.refresh}</button>
+      <button class="icon-btn" type="button" data-remove="${esc(s.id)}" data-name="${esc(s.repo)}" aria-label="Remove ${esc(s.repo)}">${ICON.remove}</button>` : ''}</span>
+  </div>`;
+
+  view(`<div class="wrap">
+    <div class="page-head"><h1>Browse</h1></div>
+    ${browseTabs('repos')}
+    <div class="stack">
+      <form class="add-source" id="add-source">
+        <label class="field">Repository<input id="src-repo" placeholder="owner/repo or github.com link" required autocomplete="off" spellcheck="false"></label>
+        <label class="field">Manifest path (optional)<input id="src-path" placeholder="anime-source.json" autocomplete="off" spellcheck="false"></label>
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+      <p class="lede">Akari reads an <code>anime-source.json</code> manifest from each repository and re-checks it every 30 minutes.${STATIC ? ' This web version reads public repositories only.' : ''} Only add video you have the rights to stream.</p>
+      <div class="list">${srcs.map(repoRow).join('') || ''}</div>
+      <details><summary>Manifest format</summary>
+<pre class="manifest" style="margin-top:10px">{
+  "schema": "akari-source/1",
+  "name": "My Library",
+  "shows": [{
+    "slug": "my-series",
+    "ids": { "anilist": 21, "mal": 21 },
+    "episodes": [
+      { "number": 1, "src": "https://cdn.example.com/ep1/master.m3u8",
+        "released": "2026-10-19",
+        "intro": { "start": 62, "end": 152 },
+        "subtitles": [{ "lang": "en", "label": "English", "src": "subs/ep1.vtt" }] },
+      { "number": 2, "src": "videos/ep2.mp4" }
+    ]
+  }]
+}</pre>
+        <p class="lede" style="margin-top:10px">With an AniList id, the title, art, synopsis and MyAnimeList id fill in automatically. <code>released</code> dates feed the Updates tab. Paths without <code>https://</code> are read from the repository itself.</p>
+      </details>
+    </div>
+  </div>`);
+
+  $('#add-source').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true; btn.textContent = 'Reading…';
+    try {
+      const s = await api('/api/sources', { method: 'POST', body: { repo: $('#src-repo').value, path: $('#src-path').value } });
+      toast(`Added ${s.repo}: ${plural(s.shows, 'series')}, ${plural(s.episodes, 'episode')}.`, 'ok');
+      catalog = null;
+      browseReposPage();
+    } catch (err) {
+      toast(err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Add';
+    }
+  });
+  $$('[data-refresh]').forEach((b) => b.addEventListener('click', async () => {
+    b.disabled = true;
+    try {
+      const s = await api(`/api/sources/${enc(b.dataset.refresh)}/refresh`, { method: 'POST' });
+      toast(s.error ? s.error : `Refreshed ${s.repo}.`, s.error ? 'error' : 'ok');
+      catalog = null;
+      browseReposPage();
+    } catch (err) { toast(err.message, 'error'); b.disabled = false; }
+  }));
+  $$('[data-remove]').forEach((b) => b.addEventListener('click', async () => {
+    if (b.dataset.armed !== '1') {
+      b.dataset.armed = '1';
+      b.style.color = 'var(--bad)';
+      toast(`Tap remove again to take ${b.dataset.name} out of Akari.`);
+      setTimeout(() => { b.dataset.armed = ''; b.style.color = ''; }, 4000);
+      return;
+    }
+    try {
+      await api(`/api/sources/${enc(b.dataset.remove)}`, { method: 'DELETE' });
+      toast(`Removed ${b.dataset.name}.`);
+      catalog = null;
+      browseReposPage();
+    } catch (err) { toast(err.message, 'error'); }
+  }));
+}
+
+// ---------------- More ----------------
+async function morePage() {
+  const tr = await api('/api/trackers');
+  const connected = Object.values(tr).filter((t) => t.connected).map((t) => t.name);
+  const item = (href, glyph, name, detail) => `<a class="row icon-row" href="${href}">
+    <span class="avatar" style="--h:${hue(name)}" aria-hidden="true">${glyph}</span>
+    <span class="main"><span class="name">${name}</span><span class="detail">${detail}</span></span>
+    <span class="end">${CHEVRON}</span></a>`;
+  view(`<div class="wrap"><div class="page-head"><h1>More</h1></div>
+    <div class="list" style="margin-top:8px">
+      ${item('#/more/trackers', '↻', 'Tracking', connected.length ? `Connected: ${connected.join(', ')}` : 'Sync progress to AniList, MyAnimeList and Kitsu')}
+      ${item('#/browse/repos', '⌥', 'Repositories', 'Add, refresh or remove GitHub sources')}
+      ${item('#/history', '◷', 'Watch history', 'Resume or clear what you have watched')}
+      ${item('#/more/about', 'A', 'About Akari', STATIC ? 'Web version · data stays in this browser' : 'Self-hosted version')}
+    </div></div>`);
+}
+
+async function aboutPage() {
+  view(`<div class="wrap"><div class="page-head"><div style="display:grid;gap:4px"><a class="eyebrow" href="#/more" style="text-decoration:none">← More</a><h1>About Akari</h1></div></div>
+    <div class="stack">
+      <p class="lede">Akari plays the shows listed in GitHub repositories you add, and keeps AniList, MyAnimeList and Kitsu up to date as you watch. It does not find or scrape video; each repository decides what it lists.</p>
+      <p class="lede">${STATIC ? 'This is the web version. Your repositories, watch history and sign-ins are saved in this browser only. MyAnimeList sync and private repositories need the self-hosted version.' : 'This is the self-hosted version. Everything Akari remembers is stored on this server.'}</p>
+      <div><a class="btn quiet" href="https://github.com/Astrolupus/Akari" target="_blank" rel="noopener">Source code on GitHub</a></div>
+    </div></div>`);
+}
+
+async function trackersPage() {
+  const tr = await api('/api/trackers');
+  document.title = 'Tracking · Akari';
+  const card = (key, t) => {
+    let body;
+    if (t.connected) {
+      body = `<div class="user">${t.user?.avatar ? `<img src="${esc(t.user.avatar)}" alt="">` : ''}<span>Signed in as <a href="${esc(t.user?.url || '#')}" target="_blank" rel="noopener"><b>${esc(t.user?.name || 'you')}</b></a></span></div>
+        <p>Episodes you watch past 85% update your ${t.name} list.</p>
+        <div><button class="btn small quiet danger" data-disconnect="${key}" type="button">Disconnect</button></div>`;
+    } else if (t.unavailable) {
+      body = `<p>${esc(t.unavailable)}</p>`;
+    } else if (t.needsClientId) {
+      body = `<p>AniList needs a free app registration once. On <a href="https://anilist.co/settings/developer" target="_blank" rel="noopener">AniList → Developer</a>, create a client with this redirect URL:</p>
+        <p><code>${esc(t.redirect)}</code></p>
+        <form id="anilist-client-form">
+          <label class="field">Client ID<input id="anilist-client-id" inputmode="numeric" autocomplete="off" required placeholder="12345"></label>
+          <div><button class="btn small primary" type="submit">Save</button></div>
+        </form>`;
+    } else if (key === 'kitsu') {
+      body = `<p>Sign in with your Kitsu account. Akari keeps the access token, never your password.</p>
+        <form id="kitsu-form">
+          <label class="field">Email<input id="kitsu-user" type="email" autocomplete="username" required></label>
+          <label class="field">Password<input id="kitsu-pass" type="password" autocomplete="current-password" required></label>
+          <div><button class="btn small primary" type="submit">Sign in</button></div>
+        </form>`;
+    } else if (!t.configured) {
+      body = `<p>Register an app with ${t.name}, add ${t.setup.map((v) => `<code>${v}</code>`).join(' and ')} to <code>.env</code>, then restart Akari.</p>
+        <p>Redirect URL: <code>${esc(t.redirect)}</code></p>`;
+    } else {
+      body = `<p>You'll sign in on ${t.name} and come straight back here.</p><div><a class="btn small primary" href="${esc(t.authUrl)}">Connect</a></div>`;
+    }
+    return `<div class="tracker"><div class="tracker-top"><h3>${t.name}</h3><span class="chip ${t.connected ? 'completed' : ''}">${t.connected ? 'Connected' : 'Not connected'}</span></div>${body}</div>`;
+  };
+  view(`<div class="wrap">
+    <div class="page-head"><div style="display:grid;gap:4px"><a class="eyebrow" href="#/more" style="text-decoration:none">← More</a><h1>Tracking</h1>
+      <p>Akari matches series by AniList, MyAnimeList or Kitsu id and moves them to Watching or Completed as you go. It never lowers your progress.</p></div></div>
+    <div class="stack"><div class="tracker-list">${Object.entries(tr).map(([k, t]) => card(k, t)).join('')}</div></div>
+  </div>`);
+
+  $$('[data-disconnect]').forEach((b) => b.addEventListener('click', async () => {
+    await api(`/api/trackers/${b.dataset.disconnect}/disconnect`, { method: 'POST' });
+    toast(`Disconnected ${TRACKER_NAME[b.dataset.disconnect]}.`);
+    catalog = null;
+    trackersPage();
+  }));
+  $('#anilist-client-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/api/trackers/anilist/client', { method: 'POST', body: { clientId: $('#anilist-client-id').value } });
+      trackersPage();
+    } catch (err) { toast(err.message, 'error'); }
+  });
+  $('#kitsu-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = e.submitter; btn.disabled = true;
+    try {
+      await api('/api/trackers/kitsu/login', { method: 'POST', body: { username: $('#kitsu-user').value, password: $('#kitsu-pass').value } });
+      toast('Connected Kitsu.', 'ok');
+      trackersPage();
+    } catch (err) { toast(err.message, 'error'); btn.disabled = false; }
+  });
 }
 
 // ---------------- Search ----------------
@@ -210,63 +523,72 @@ async function searchPage(q) {
   const hits = c.shows.filter((s) => [s.title, s.titleNative, ...(s.genres || []), s.studio].join(' ').toLowerCase().includes(needle));
   $('#search-input').value = q;
   view(`<div class="wrap">
-    <div class="page-head"><span class="eyebrow">Search</span><h1>${hits.length} result${hits.length === 1 ? '' : 's'} for “${esc(q)}”</h1></div>
-    ${hits.length ? `<div class="grid">${hits.map((s) => `<a class="card" href="${showHref(s)}">${poster(s)}<span class="title">${esc(s.title)}</span><span class="sub">${esc(s.sourceLabel)}</span></a>`).join('')}</div>`
-      : '<p class="lede">Nothing in your connected repos matches that. Search covers titles, genres and studios.</p>'}
+    <div class="page-head"><h1>${hits.length} result${hits.length === 1 ? '' : 's'} for “${esc(q)}”</h1></div>
+    ${hits.length ? `<div class="grid">${hits.map((s) => `<a class="card" href="${showHref(s)}"><div class="art">${poster(s)}</div><span class="title">${esc(s.title)}</span><span class="sub">${esc(s.sourceLabel)}</span></a>`).join('')}</div>`
+      : emptyState('?', 'No matches', c.shows.length ? 'Search covers titles, genres and studios in your repositories.' : 'Add a repository first, then search its shows.')}
   </div>`);
 }
 
-// ---------------- Show page ----------------
-function episodeRow(show, e, p, current) {
+// ---------------- Series page ----------------
+function episodeCard(show, e, p, current) {
   const watched = p?.watched?.includes(e.number);
   const inProgress = p?.ep === e.number && !watched && p.duration;
   const pct = inProgress ? Math.min(100, (p.position / p.duration) * 100) : watched ? 100 : 0;
-  return `<a class="ep${watched ? ' watched' : ''}${current ? ' current' : ''}" href="${watchHref(show.key, e.number)}" ${current ? 'aria-current="true"' : ''}>
-    <span class="num">${epCode(e.number)}</span>
-    <span class="still" style="background-image:${e.thumbnail || show.banner ? cssUrl(e.thumbnail || show.banner) : 'none'};background-color:${safeColor(show.color)}">${pct ? `<span class="bar"><i style="width:${pct}%"></i></span>` : ''}</span>
-    <span><span class="ep-title">${esc(e.title || `Episode ${e.number}`)}</span><br>
-      <span class="ep-meta">${watched ? 'Watched' : inProgress ? `${fmt(p.duration - p.position)} left` : esc(fmt(e.duration))}</span></span>
-    <span class="ep-meta right">${esc(fmt(e.duration))}</span>
+  const art = e.thumbnail || show.banner;
+  return `<a class="ep-card${watched ? ' watched' : ''}" href="${watchHref(show.key, e.number)}" ${current ? 'aria-current="true"' : ''}>
+    <span class="still" style="background-image:${art ? cssUrl(art) : 'none'};background-color:${safeColor(show.color)}">
+      ${e.duration ? `<span class="ep-badge">${minutes(e.duration)}</span>` : ''}
+      ${pct ? `<span class="bar"><i style="width:${pct}%"></i></span>` : ''}
+    </span>
+    <span style="display:grid;gap:2px;min-width:0">
+      <span class="ep-title">${epCode(e.number)} – ${esc(e.title || `Episode ${e.number}`)}</span>
+      <span class="ep-meta">${watched ? 'Watched' : inProgress ? `${fmt(p.duration - p.position)} left` : e.released ? new Date(e.released).toLocaleDateString() : ''}</span>
+    </span>
   </a>`;
 }
 
 async function showPage(key) {
   const s = await api(`/api/show/${enc(key)}`);
   const p = s.progress;
-  const next = p ? (p.watched?.includes(p.ep) ? s.episodes.find((e) => e.number > p.ep) : s.episodes.find((e) => e.number === p.ep)) : s.episodes[0];
-  const target = next || s.episodes[0];
+  const watched = new Set(p?.watched || []);
+  const next = s.episodes.find((e) => !watched.has(e.number)) || s.episodes[0];
+  const resuming = p && p.ep === next.number && !watched.has(next.number) && p.position > 5;
   document.title = `${s.title} · Akari`;
 
   view(`
-    <div class="show-banner" style="background-image:${s.banner ? cssUrl(s.banner) : 'none'};background-color:${safeColor(s.color)}"></div>
-    <div class="wrap show-layout">
-      <aside class="show-side">
+    <section class="series-hero">
+      <div class="hero-art" style="background-image:${s.banner ? cssUrl(s.banner) : 'none'};background-color:${safeColor(s.color)}"></div>
+      <div class="wrap series-top">
         ${poster(s)}
-        <div class="panel" id="tracker-panel"><h2>Trackers</h2><p class="lede">Checking your lists…</p></div>
-      </aside>
-      <div class="show-main">
-        <div style="display:grid;gap:8px">
-          <span class="eyebrow">From ${esc(s.sourceLabel)}${s.license ? ` · ${esc(s.license)}` : ''}</span>
+        <div class="series-info">
+          <span class="eyebrow">${esc(s.sourceLabel)}${s.license ? ` · ${esc(s.license)}` : ''}</span>
           <h1>${esc(s.title)}</h1>
-          ${s.titleNative ? `<div class="native" style="color:var(--muted)">${esc(s.titleNative)}</div>` : ''}
+          ${s.titleNative ? `<div class="native">${esc(s.titleNative)}</div>` : ''}
           ${metaLine({ ...s, episodeCount: s.episodes.length })}
+          <div class="actions">
+            <a class="btn primary" href="${watchHref(s.key, next.number)}"><span class="play-glyph" aria-hidden="true"></span>${resuming ? `Continue ${epCode(next.number)}` : watched.size ? `Watch ${epCode(next.number)}` : `Start watching ${epCode(next.number)}`}</a>
+          </div>
         </div>
-        <div class="actions">
-          <a class="btn primary" href="${watchHref(s.key, target.number)}"><span class="play-glyph" aria-hidden="true"></span>${p ? (next ? `Continue with ${epCode(target.number)}` : 'Watch again') : `Play ${epCode(target.number)}`}</a>
-          ${p ? '<button class="btn ghost" id="reset-progress" type="button">Clear watch history</button>' : ''}
-        </div>
+      </div>
+    </section>
+    <div class="wrap series-body">
+      <div style="display:grid;gap:22px;align-content:start;min-width:0">
         ${s.synopsis ? `<p class="synopsis">${esc(s.synopsis)}</p>` : ''}
         ${s.genres?.length ? `<div class="genres">${s.genres.map((g) => `<span>${esc(g)}</span>`).join('')}</div>` : ''}
         <section aria-label="Episodes">
-          <div class="shelf-head"><h2>Episodes</h2><span class="eyebrow mono">${s.episodes.length}${s.totalEpisodes ? ` of ${s.totalEpisodes}` : ''} available</span></div>
-          <div class="episodes">${s.episodes.map((e) => episodeRow(s, e, p, false)).join('')}</div>
+          <div class="section-head"><h2>Episodes</h2><span class="eyebrow">${s.episodes.length}${s.totalEpisodes ? ` of ${s.totalEpisodes}` : ''} available · ${watched.size} watched</span></div>
+          <div class="ep-grid">${s.episodes.map((e) => episodeCard(s, e, p, false)).join('')}</div>
         </section>
       </div>
+      <aside class="side">
+        <div class="panel" id="tracker-panel"><h2>Tracking</h2><p class="lede">Checking your lists…</p></div>
+        ${p ? '<button class="btn quiet small" id="reset-progress" type="button">Clear watch history for this series</button>' : ''}
+      </aside>
     </div>`);
 
   $('#reset-progress')?.addEventListener('click', async () => {
     await api(`/api/progress/${enc(s.key)}`, { method: 'DELETE' });
-    toast('Cleared watch history for this show. Your tracker lists were not changed.');
+    toast('Cleared watch history for this series. Your tracker lists were not changed.');
     route();
   });
   renderTrackerPanel(s);
@@ -278,33 +600,33 @@ async function renderTrackerPanel(s) {
   try {
     status = await api(`/api/show/${enc(s.key)}/trackers`);
   } catch (e) {
-    panel.innerHTML = `<h2>Trackers</h2><p class="chip error">${esc(e.message)}</p>`;
+    panel.innerHTML = `<h2>Tracking</h2><p class="err">${esc(e.message)}</p>`;
     return;
   }
   if (!panel.isConnected) return;
   const keys = Object.keys(status);
   if (!keys.length) {
-    panel.innerHTML = `<h2>Trackers</h2><p class="lede" style="font-size:var(--step--1)">Connect AniList, MyAnimeList or Kitsu in <a href="#/settings">Settings</a> and Akari will update your list as you watch.</p>`;
+    panel.innerHTML = '<h2>Tracking</h2><p class="lede">Connect AniList, MyAnimeList or Kitsu in <a href="#/more/trackers">More → Tracking</a> and Akari updates your lists as you watch.</p>';
     return;
   }
   const rows = keys.map((k) => {
     const t = status[k];
     let right;
-    if (!t.ok) right = `<span class="chip error" title="${esc(t.reason)}">Error</span>`;
-    else if (!t.linked) right = '<span class="chip">No id for this show</span>';
+    if (!t.ok) right = '<span class="chip error">Error</span>';
+    else if (!t.linked) right = '<span class="chip">No id for this series</span>';
     else if (!t.entry) right = '<span class="chip">Not on your list</span>';
     else right = `<span class="chip ${t.entry.status}">${STATUS_LABEL[t.entry.status]} · <span class="mono">${t.entry.progress}${s.totalEpisodes ? `/${s.totalEpisodes}` : ''}</span></span>`;
     return `<div class="tracker-row"><b>${t.url ? `<a href="${esc(t.url)}" target="_blank" rel="noopener">${TRACKER_NAME[k]}</a>` : TRACKER_NAME[k]}</b>${right}</div>
-      ${t.ok === false ? `<p style="margin:0;font-size:var(--step--1);color:var(--bad)">${esc(t.reason)}</p>` : ''}`;
+      ${t.ok === false ? `<p class="err">${esc(t.reason)}</p>` : ''}`;
   }).join('');
   const first = Object.values(status).find((t) => t.entry)?.entry;
-  panel.innerHTML = `<h2>Trackers</h2>${rows}
+  panel.innerHTML = `<h2>Tracking</h2>${rows}
     <form class="tracker-form" id="tracker-form">
       <label class="sr-only" for="tr-status">List status</label>
       <select id="tr-status">${Object.entries(STATUS_LABEL).map(([v, l]) => `<option value="${v}" ${first?.status === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <label class="sr-only" for="tr-progress">Episodes watched</label>
       <input id="tr-progress" type="number" min="0" ${s.totalEpisodes ? `max="${s.totalEpisodes}"` : ''} value="${first?.progress ?? 0}" inputmode="numeric">
-      <button class="btn small primary" type="submit">Update all</button>
+      <button class="btn small primary" type="submit">Update</button>
     </form>`;
   $('#tracker-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -359,7 +681,7 @@ async function watchPage(key, epStr) {
   const s = await api(`/api/show/${enc(key)}`);
   const n = Number(epStr);
   const idx = s.episodes.findIndex((e) => e.number === n);
-  if (idx < 0) throw new Error(`${epCode(n)} is not in this show's source.`);
+  if (idx < 0) throw new Error(`${epCode(n)} is not in this series' repository.`);
   const ep = s.episodes[idx], prev = s.episodes[idx - 1], next = s.episodes[idx + 1];
   const p = s.progress;
   document.title = `${epCode(ep.number)} · ${s.title} · Akari`;
@@ -375,22 +697,23 @@ async function watchPage(key, epStr) {
     <div class="wrap watch-layout">
       <div class="watch-info">
         <a class="show-link" href="${showHref(s)}">${esc(s.title)}</a>
-        <h1><span class="mono" style="color:var(--yuzu)">${epCode(ep.number)}</span> ${esc(ep.title || `Episode ${ep.number}`)}</h1>
+        <h1>${epCode(ep.number)} – ${esc(ep.title || `Episode ${ep.number}`)}</h1>
         <div class="actions">
-          ${prev ? `<a class="btn small" href="${watchHref(s.key, prev.number)}">Previous · ${epCode(prev.number)}</a>` : ''}
-          ${next ? `<a class="btn small" href="${watchHref(s.key, next.number)}">Next · ${epCode(next.number)}</a>` : ''}
+          ${prev ? `<a class="btn quiet small" href="${watchHref(s.key, prev.number)}">Previous</a>` : ''}
+          ${next ? `<a class="btn quiet small" href="${watchHref(s.key, next.number)}">Next episode</a>` : ''}
           <span class="chip" id="sync-chip">Syncs at 85%</span>
         </div>
         <p class="keys"><kbd>Space</kbd> play/pause · <kbd>←</kbd><kbd>→</kbd> 10 s · <kbd>F</kbd> fullscreen · <kbd>N</kbd> next episode</p>
       </div>
       <aside class="watch-side" aria-label="Episodes">
-        <div class="episodes">${s.episodes.map((e) => episodeRow(s, e, p, e.number === ep.number)).join('')}</div>
+        <div class="section-head"><h2>Episodes</h2></div>
+        <div class="ep-grid">${s.episodes.map((e) => episodeCard(s, e, p, e.number === ep.number)).join('')}</div>
       </aside>
     </div>`);
 
   const video = $('#video');
   let hls = null, lastSave = 0, synced = Boolean(p?.watched?.includes(ep.number)), countdown = null;
-  if (synced) $('#sync-chip').textContent = 'Already marked watched';
+  if (synced) $('#sync-chip').textContent = 'Already watched';
 
   try { hls = await attachSource(video, ep.src); } catch (e) { toast(e.message, 'error'); }
 
@@ -414,10 +737,10 @@ async function watchPage(key, epStr) {
       chip.textContent = 'Syncing…';
       api('/api/watched', { method: 'POST', body: { key: s.key, ep: ep.number } })
         .then((r) => {
-          const n = Object.keys(r.trackers).length;
-          chip.textContent = n ? 'Marked watched' : 'Marked watched here';
+          const count = Object.keys(r.trackers).length;
+          chip.textContent = count ? 'Marked watched' : 'Marked watched here';
           chip.className = 'chip completed';
-          if (n) reportSync(r.trackers, `Updated ${epCode(ep.number)} on`);
+          if (count) reportSync(r.trackers, `Updated ${epCode(ep.number)} on`);
         })
         .catch((e) => { chip.textContent = 'Sync failed'; chip.className = 'chip error'; toast(e.message, 'error'); synced = false; });
     }
@@ -432,9 +755,9 @@ async function watchPage(key, epStr) {
     let left = 8;
     card.hidden = false;
     const paint = () => {
-      card.innerHTML = `<span class="eyebrow">Up next</span><b>${epCode(next.number)} ${esc(next.title || '')}</b>
+      card.innerHTML = `<span class="eyebrow">Up next</span><b>${epCode(next.number)} – ${esc(next.title || `Episode ${next.number}`)}</b>
         <span>Starting in <span class="count">${left}</span> s</span>
-        <div class="actions"><a class="btn small primary" href="${watchHref(s.key, next.number)}">Play now</a><button class="btn small ghost" type="button" id="cancel-next">Stay here</button></div>`;
+        <div class="actions"><a class="btn small primary" href="${watchHref(s.key, next.number)}">Play now</a><button class="btn small quiet" type="button" id="cancel-next">Cancel</button></div>`;
       $('#cancel-next').onclick = () => { clearInterval(countdown); card.hidden = true; };
     };
     paint();
@@ -453,7 +776,7 @@ async function watchPage(key, epStr) {
     else if (e.key.toLowerCase() === 'n' && next) location.hash = watchHref(s.key, next.number);
   };
   document.addEventListener('keydown', onKey);
-  video.play().catch(() => {}); // browsers may block autoplay with sound; controls stay available
+  video.play().catch(() => {}); // autoplay with sound may be blocked; controls stay available
 
   teardown = () => {
     save(true);
@@ -462,148 +785,7 @@ async function watchPage(key, epStr) {
     hls?.destroy();
     video.removeAttribute('src');
     video.load();
-    document.title = 'Akari';
   };
-}
-
-// ---------------- Settings ----------------
-async function settingsPage() {
-  const [srcs, tr] = await Promise.all([api('/api/sources'), api('/api/trackers')]);
-  document.title = 'Settings · Akari';
-
-  const sourceCard = (s) => `<div class="source">
-    <div>
-      <div class="name">${esc(s.name)}</div>
-      <div class="repo">${s.repo ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.repo)}</a> · ${esc(s.ref)} · ${esc(s.path)}${s.private ? ' · private' : ''}` : 'Bundled with Akari'}</div>
-      <div class="stats">${plural(s.shows, 'show')} · ${plural(s.episodes, 'episode')}${s.sha ? ` · commit <span class="mono">${esc(s.sha)}</span>` : ''}${s.fetchedAt ? ` · checked ${new Date(s.fetchedAt).toLocaleString()}` : ''}</div>
-    </div>
-    <div class="btns">${s.kind === 'github' ? `<button class="btn small" data-refresh="${esc(s.id)}" type="button">Refresh</button><button class="btn small ghost danger" data-remove="${esc(s.id)}" data-name="${esc(s.repo)}" type="button">Remove</button>` : ''}</div>
-    ${s.error ? `<p class="err">${esc(s.error)} Showing the last version that loaded.</p>` : ''}
-  </div>`;
-
-  const trackerCard = (key, t) => {
-    let body;
-    if (t.connected) {
-      body = `<div class="user">${t.user?.avatar ? `<img src="${esc(t.user.avatar)}" alt="">` : ''}<span>Signed in as <a href="${esc(t.user?.url || '#')}" target="_blank" rel="noopener"><b>${esc(t.user?.name || 'you')}</b></a></span></div>
-        <p>Episodes you watch past 85% update your ${t.name} list.</p>
-        <div><button class="btn small ghost danger" data-disconnect="${key}" type="button">Disconnect</button></div>`;
-    } else if (t.unavailable) {
-      body = `<p>${esc(t.unavailable)}</p>`;
-    } else if (t.needsClientId) {
-      body = `<p>AniList needs a free app registration once. On <a href="https://anilist.co/settings/developer" target="_blank" rel="noopener">AniList → Developer</a>, create a client with this redirect URL:</p>
-        <p><code>${esc(t.redirect)}</code></p>
-        <form id="anilist-client-form">
-          <label class="field">Client ID<input id="anilist-client-id" inputmode="numeric" autocomplete="off" required placeholder="12345"></label>
-          <div><button class="btn small primary" type="submit">Save and continue</button></div>
-        </form>`;
-    } else if (key === 'kitsu') {
-      body = `<p>Sign in with your Kitsu account. Akari keeps the access token and never stores your password.</p>
-        <form id="kitsu-form">
-          <label class="field">Email<input id="kitsu-user" type="email" autocomplete="username" required></label>
-          <label class="field">Password<input id="kitsu-pass" type="password" autocomplete="current-password" required></label>
-          <div><button class="btn small primary" type="submit">Sign in to Kitsu</button></div>
-        </form>`;
-    } else if (!t.configured) {
-      body = `<p>Register an app with ${t.name}, then add ${t.setup.map((v) => `<code>${v}</code>`).join(' and ')} to <code>.env</code> and restart Akari.</p>
-        <p>Redirect URL to register: <code>${esc(t.redirect)}</code></p>`;
-    } else {
-      body = `<p>You'll sign in on ${t.name} and come straight back here.</p><div><a class="btn small primary" href="${esc(t.authUrl)}">Connect ${t.name}</a></div>`;
-    }
-    return `<div class="tracker"><div class="tracker-top"><h3>${t.name}</h3><span class="chip ${t.connected ? 'completed' : ''}">${t.connected ? 'Connected' : 'Not connected'}</span></div>${body}</div>`;
-  };
-
-  view(`<div class="wrap">
-    <div class="page-head"><span class="eyebrow">Settings</span><h1>Sources and trackers</h1>
-      <p>Your library is built from GitHub repos. Your watch history syncs to the anime trackers you connect.</p>
-      ${STATIC ? '<p>This web version reads public repos only and keeps your sources, progress and sign-ins in this browser.</p>' : ''}</div>
-    <div class="settings">
-      <section aria-labelledby="h-src">
-        <h2 id="h-src">GitHub sources</h2>
-        <p class="lede">Each repo needs an <code>anime-source.json</code> manifest that lists shows and episode video links. Akari re-reads it every 30 minutes and whenever you press Refresh. Only add video you have the rights to stream.</p>
-        <form class="add-source" id="add-source">
-          <label class="field">Repository<input id="src-repo" placeholder="owner/repo or https://github.com/owner/repo" required autocomplete="off" spellcheck="false"></label>
-          <label class="field">Manifest path (optional)<input id="src-path" placeholder="anime-source.json" autocomplete="off" spellcheck="false"></label>
-          <button class="btn primary" type="submit">Add repo</button>
-        </form>
-        <div class="source-list">${srcs.map(sourceCard).join('') || '<p class="lede">No sources yet.</p>'}</div>
-        <details><summary>Manifest format</summary>
-<pre class="manifest">{
-  "schema": "akari-source/1",
-  "name": "My Library",
-  "shows": [{
-    "slug": "my-series",
-    "ids": { "anilist": 21, "mal": 21 },
-    "episodes": [
-      { "number": 1, "src": "https://cdn.example.com/ep1/master.m3u8",
-        "intro": { "start": 62, "end": 152 },
-        "subtitles": [{ "lang": "en", "label": "English", "src": "subs/ep1.vtt" }] },
-      { "number": 2, "src": "videos/ep2.mp4" }
-    ]
-  }]
-}</pre>
-          <p class="lede">With an AniList id, the title, art, synopsis and MyAnimeList id are filled in for you. Paths without <code>https://</code> are read from the repo itself.</p>
-        </details>
-      </section>
-      <section aria-labelledby="h-tr">
-        <h2 id="h-tr">Anime trackers</h2>
-        <p class="lede">Akari matches shows by their AniList, MyAnimeList or Kitsu id and moves them to Watching or Completed as you go. It never lowers your progress.</p>
-        <div class="tracker-list">${Object.entries(tr).map(([k, t]) => trackerCard(k, t)).join('')}</div>
-      </section>
-    </div></div>`);
-
-  $('#add-source').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = e.submitter; btn.disabled = true; btn.textContent = 'Reading repo…';
-    try {
-      const s = await api('/api/sources', { method: 'POST', body: { repo: $('#src-repo').value, path: $('#src-path').value } });
-      toast(`Added ${s.repo}: ${plural(s.shows, 'show')}, ${plural(s.episodes, 'episode')}.`, 'ok');
-      catalog = null;
-      settingsPage();
-    } catch (err) {
-      toast(err.message, 'error');
-      btn.disabled = false; btn.textContent = 'Add repo';
-    }
-  });
-  $$('[data-refresh]').forEach((b) => b.addEventListener('click', async () => {
-    b.disabled = true;
-    try {
-      const s = await api(`/api/sources/${enc(b.dataset.refresh)}/refresh`, { method: 'POST' });
-      toast(s.error ? s.error : `Refreshed ${s.repo}.`, s.error ? 'error' : 'ok');
-      catalog = null;
-      settingsPage();
-    } catch (err) { toast(err.message, 'error'); b.disabled = false; }
-  }));
-  $$('[data-remove]').forEach((b) => b.addEventListener('click', async () => {
-    if (b.dataset.armed !== '1') { b.dataset.armed = '1'; b.textContent = 'Press again to remove'; setTimeout(() => { b.dataset.armed = ''; b.textContent = 'Remove'; }, 4000); return; }
-    try {
-      await api(`/api/sources/${enc(b.dataset.remove)}`, { method: 'DELETE' });
-      toast(`Removed ${b.dataset.name}.`);
-      catalog = null;
-      settingsPage();
-    } catch (err) { toast(err.message, 'error'); }
-  }));
-  $$('[data-disconnect]').forEach((b) => b.addEventListener('click', async () => {
-    await api(`/api/trackers/${b.dataset.disconnect}/disconnect`, { method: 'POST' });
-    toast(`Disconnected ${TRACKER_NAME[b.dataset.disconnect]}.`);
-    catalog = null;
-    settingsPage();
-  }));
-  $('#anilist-client-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    try {
-      await api('/api/trackers/anilist/client', { method: 'POST', body: { clientId: $('#anilist-client-id').value } });
-      settingsPage();
-    } catch (err) { toast(err.message, 'error'); }
-  });
-  $('#kitsu-form')?.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const btn = e.submitter; btn.disabled = true;
-    try {
-      await api('/api/trackers/kitsu/login', { method: 'POST', body: { username: $('#kitsu-user').value, password: $('#kitsu-pass').value } });
-      toast('Connected Kitsu.', 'ok');
-      settingsPage();
-    } catch (err) { toast(err.message, 'error'); btn.disabled = false; }
-  });
 }
 
 // ---------------- Boot ----------------

@@ -4,29 +4,46 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Akari</title>
-  <meta name="theme-color" content="#0c0f17">
+  <meta name="theme-color" content="#000000">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Dela+Gothic+One&family=JetBrains+Mono:wght@400;600&family=Zen+Kaku+Gothic+New:wght@400;500;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Lato:wght@400;700;900&family=JetBrains+Mono:wght@500;700&display=swap">
   <link rel="stylesheet" href="app.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230c0f17'/%3E%3Ccircle cx='16' cy='16' r='8' fill='%23f4c74a'/%3E%3C/svg%3E">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23000'/%3E%3Cpath d='M16 6l9 20h-5l-1.6-4h-4.8L12 26H7z' fill='%23a46bff'/%3E%3C/svg%3E">
 </head>
 <body>
   <a class="skip" href="#view">Skip to content</a>
-  <header class="top">
-    <div class="top-inner">
-      <a class="brand" href="#/" aria-label="Akari home"><span class="brand-dot" aria-hidden="true"></span>Akari</a>
-      <nav class="nav" aria-label="Main">
-        <a href="#/" data-nav="home">Library</a>
-        <a href="#/settings" data-nav="settings">Settings</a>
+  <header class="appbar">
+    <div class="appbar-inner">
+      <a class="brand" href="#/" aria-label="Akari library">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M16 4l10 22h-5.4l-1.8-4.4h-5.6L11.4 26H6z" fill="currentColor"/></svg>
+        <span>Akari</span>
+      </a>
+      <nav class="topnav" aria-label="Main">
+        <a href="#/" data-nav="library">Library</a>
+        <a href="#/updates" data-nav="updates">Updates</a>
+        <a href="#/history" data-nav="history">History</a>
+        <a href="#/browse" data-nav="browse">Browse</a>
+        <a href="#/more" data-nav="more">More</a>
       </nav>
       <form class="search" id="search-form" role="search">
         <label class="sr-only" for="search-input">Search your library</label>
-        <input id="search-input" type="search" placeholder="Search titles" autocomplete="off">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.5 4a6.5 6.5 0 015.2 10.4l4.4 4.4-1.4 1.4-4.4-4.4A6.5 6.5 0 1110.5 4zm0 2a4.5 4.5 0 100 9 4.5 4.5 0 000-9z" fill="currentColor"/></svg>
+        <input id="search-input" type="search" placeholder="Search" autocomplete="off">
       </form>
     </div>
   </header>
+
   <main id="view" tabindex="-1"></main>
+
+  <nav class="tabbar" aria-label="Main">
+    <a href="#/" data-nav="library"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z" fill="currentColor"/></svg><span>Library</span></a>
+    <a href="#/updates" data-nav="updates"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a6 6 0 016 6v4l2 3H4l2-3V9a6 6 0 016-6zm-2 15h4a2 2 0 01-4 0z" fill="currentColor"/></svg><span>Updates</span></a>
+    <a href="#/history" data-nav="history"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3a9 9 0 110 18 9 9 0 010-18zm1 4h-2v6l5 3 1-1.7-4-2.4z" fill="currentColor"/></svg><span>History</span></a>
+    <a href="#/browse" data-nav="browse"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2a10 10 0 110 20 10 10 0 010-20zm4 6l-6 2-2 6 6-2zm-4 3a1 1 0 110 2 1 1 0 010-2z" fill="currentColor"/></svg><span>Browse</span></a>
+    <a href="#/more" data-nav="more"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 10a2 2 0 110 4 2 2 0 010-4zm7 0a2 2 0 110 4 2 2 0 010-4zm7 0a2 2 0 110 4 2 2 0 010-4z" fill="currentColor"/></svg><span>More</span></a>
+  </nav>
+
   <div id="toasts" class="toasts" aria-live="polite"></div>
   <script src="app.js" type="module"></script>
 </body>

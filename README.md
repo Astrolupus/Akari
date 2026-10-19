@@ -19,7 +19,7 @@ cp .env.example .env     # optional for a first look
 npm start                # → http://localhost:3000
 ```
 
-A bundled source of Blender open movies loads on first run so the player has something to play. Turn it off with `ENABLE_SAMPLE=false`.
+Akari starts empty: add a repository under **Browse → Repositories**. To try the player first, set `ENABLE_SAMPLE=true` to load a bundled source of Blender open movies.
 
 ## Connect a GitHub repo
 
@@ -65,6 +65,7 @@ For **private repos**, set `GITHUB_TOKEN` (a fine-grained token with read-only *
 | `title`, `synopsis`, `cover`, `banner`, `year`, `genres`, `studio`, `format`, `color`, `totalEpisodes`, `license` | Optional overrides. Required in practice when there is no AniList id. |
 | `episodes[].src` | An `https://` URL, or a path relative to the manifest inside the repo. |
 | `episodes[].intro` | Seconds. Shows a Skip intro button during that span. |
+| `episodes[].released` | Optional date (`2026-10-19`). Episodes with a date appear in the Updates tab. |
 
 Large video files usually belong outside git: GitHub release assets, object storage (S3, R2, B2), or your own media server. Point `src` at them.
 
