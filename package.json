@@ -1,0 +1,16 @@
+{
+  "name": "akari",
+  "version": "1.0.0",
+  "description": "Self-hosted anime streaming site. Catalogs come from GitHub repos; progress syncs to AniList, MyAnimeList and Kitsu.",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=18.17"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "validate": "node scripts/validate.js",
+    "test": "node --test test/*.test.js"
+  }
+}

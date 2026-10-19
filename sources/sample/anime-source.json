@@ -1,0 +1,71 @@
+{
+  "schema": "akari-source/1",
+  "name": "Blender Open Movies",
+  "description": "Openly licensed short films from the Blender Foundation (CC BY), bundled so the player has something to play before you connect a repo.",
+  "shows": [
+    {
+      "slug": "sintel",
+      "title": "Sintel",
+      "synopsis": "A lone girl crosses a frozen country in search of the baby dragon she once rescued and raised, and learns too late what the years have made of him.",
+      "year": 2010,
+      "format": "Short film",
+      "studio": "Blender Institute",
+      "genres": ["Fantasy", "Adventure", "Drama"],
+      "license": "CC BY 3.0",
+      "color": "#c9784a",
+      "banner": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg",
+      "totalEpisodes": 1,
+      "episodes": [
+        { "number": 1, "title": "Sintel", "duration": 888, "src": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4", "thumbnail": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/Sintel.jpg" }
+      ]
+    },
+    {
+      "slug": "tears-of-steel",
+      "title": "Tears of Steel",
+      "synopsis": "In a ruined Amsterdam, a group of scientists stage a last-ditch experiment to stop an army of robots by replaying a breakup from decades earlier.",
+      "year": 2012,
+      "format": "Short film",
+      "studio": "Blender Institute",
+      "genres": ["Sci-Fi", "Action"],
+      "license": "CC BY 3.0",
+      "color": "#4a7bc9",
+      "banner": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg",
+      "totalEpisodes": 1,
+      "episodes": [
+        { "number": 1, "title": "Tears of Steel", "duration": 734, "src": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4", "thumbnail": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/TearsOfSteel.jpg" }
+      ]
+    },
+    {
+      "slug": "big-buck-bunny",
+      "title": "Big Buck Bunny",
+      "synopsis": "A gentle giant of a rabbit has his quiet morning ruined by three bullying rodents, and decides to plan a very thorough revenge.",
+      "year": 2008,
+      "format": "Short film",
+      "studio": "Blender Institute",
+      "genres": ["Comedy"],
+      "license": "CC BY 3.0",
+      "color": "#7fb04a",
+      "banner": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg",
+      "totalEpisodes": 1,
+      "episodes": [
+        { "number": 1, "title": "Big Buck Bunny", "duration": 596, "src": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4", "thumbnail": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/BigBuckBunny.jpg" }
+      ]
+    },
+    {
+      "slug": "elephants-dream",
+      "title": "Elephants Dream",
+      "synopsis": "Two men wander a vast, shifting machine. The older one insists he knows its rules; the younger one starts to doubt that any of it is real.",
+      "year": 2006,
+      "format": "Short film",
+      "studio": "Orange Open Movie Project",
+      "genres": ["Sci-Fi", "Psychological"],
+      "license": "CC BY 2.5",
+      "color": "#9a6ac9",
+      "banner": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg",
+      "totalEpisodes": 1,
+      "episodes": [
+        { "number": 1, "title": "Elephants Dream", "duration": 654, "src": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4", "thumbnail": "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/images/ElephantsDream.jpg" }
+      ]
+    }
+  ]
+}

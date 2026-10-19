@@ -1,0 +1,39 @@
+{
+  "schema": "akari-source/1",
+  "name": "My Anime Library",
+  "description": "Series I host myself.",
+  "shows": [
+    {
+      "slug": "my-series",
+      "ids": { "anilist": 21, "mal": 21 },
+      "episodes": [
+        {
+          "number": 1,
+          "title": "Episode title (optional)",
+          "src": "https://media.example.com/my-series/01/master.m3u8",
+          "duration": 1440,
+          "intro": { "start": 62, "end": 152 },
+          "subtitles": [
+            { "lang": "en", "label": "English", "src": "subs/my-series-01.en.vtt", "default": true }
+          ]
+        },
+        {
+          "number": 2,
+          "src": "videos/my-series-02.mp4"
+        }
+      ]
+    },
+    {
+      "slug": "show-without-anilist",
+      "title": "A show with no AniList entry",
+      "synopsis": "When there is no AniList id, write the details yourself.",
+      "cover": "art/cover.jpg",
+      "banner": "art/banner.jpg",
+      "year": 2026,
+      "genres": ["Slice of Life"],
+      "episodes": [
+        { "number": 1, "src": "videos/episode-01.mp4" }
+      ]
+    }
+  ]
+}
