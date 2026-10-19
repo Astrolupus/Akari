@@ -8,7 +8,12 @@ const enc = encodeURIComponent;
 const STATUS_LABEL = { watching: 'Watching', planning: 'Plan to watch', completed: 'Completed', paused: 'Paused', dropped: 'Dropped' };
 const TRACKER_NAME = { anilist: 'AniList', mal: 'MyAnimeList', kitsu: 'Kitsu' };
 
+// The GitHub Pages build sets AKARI_STATIC and answers /api routes in the browser.
+const STATIC = window.AKARI_STATIC === true;
+const backend = STATIC ? await import('./static-backend.js') : null;
+
 async function api(path, opts = {}) {
+  if (STATIC) return backend.handle(opts.method || 'GET', path, opts.body);
   const r = await fetch(path, {
     ...opts,
     headers: opts.body ? { 'Content-Type': 'application/json' } : undefined,
@@ -33,6 +38,7 @@ const fmt = (sec) => {
   const h = Math.floor(sec / 3600), m = Math.floor((sec % 3600) / 60), s = sec % 60;
   return h ? `${h}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}` : `${m}:${String(s).padStart(2, '0')}`;
 };
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const epCode = (n) => `E${String(n).padStart(2, '0')}`;
 const hue = (t) => [...String(t)].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7) % 360;
 const safeColor = (c) => (/^#[0-9a-f]{3,8}$/i.test(c || '') ? c : 'var(--panel-2)');
@@ -76,6 +82,17 @@ const routes = [
 
 async function route() {
   if (teardown) { teardown(); teardown = null; }
+  if (STATIC && /access_token=/.test(location.hash)) {
+    // AniList's browser sign-in returns the token in the URL fragment.
+    const fragment = location.hash;
+    history.replaceState(null, '', `${location.pathname}#/settings`);
+    try {
+      await backend.finishAniListSignIn(fragment);
+      toast('Connected AniList.', 'ok');
+    } catch (e) {
+      toast(e.message, 'error');
+    }
+  }
   const h = location.hash || '#/';
   $$('[data-nav]').forEach((a) => a.removeAttribute('aria-current'));
   $(`[data-nav="${h.startsWith('#/settings') ? 'settings' : 'home'}"]`)?.setAttribute('aria-current', 'page');
@@ -458,7 +475,7 @@ async function settingsPage() {
     <div>
       <div class="name">${esc(s.name)}</div>
       <div class="repo">${s.repo ? `<a href="${esc(s.url)}" target="_blank" rel="noopener">${esc(s.repo)}</a> · ${esc(s.ref)} · ${esc(s.path)}${s.private ? ' · private' : ''}` : 'Bundled with Akari'}</div>
-      <div class="stats"><span class="mono">${s.shows}</span> shows · <span class="mono">${s.episodes}</span> episodes${s.sha ? ` · commit <span class="mono">${esc(s.sha)}</span>` : ''}${s.fetchedAt ? ` · checked ${new Date(s.fetchedAt).toLocaleString()}` : ''}</div>
+      <div class="stats">${plural(s.shows, 'show')} · ${plural(s.episodes, 'episode')}${s.sha ? ` · commit <span class="mono">${esc(s.sha)}</span>` : ''}${s.fetchedAt ? ` · checked ${new Date(s.fetchedAt).toLocaleString()}` : ''}</div>
     </div>
     <div class="btns">${s.kind === 'github' ? `<button class="btn small" data-refresh="${esc(s.id)}" type="button">Refresh</button><button class="btn small ghost danger" data-remove="${esc(s.id)}" data-name="${esc(s.repo)}" type="button">Remove</button>` : ''}</div>
     ${s.error ? `<p class="err">${esc(s.error)} Showing the last version that loaded.</p>` : ''}
@@ -470,6 +487,15 @@ async function settingsPage() {
       body = `<div class="user">${t.user?.avatar ? `<img src="${esc(t.user.avatar)}" alt="">` : ''}<span>Signed in as <a href="${esc(t.user?.url || '#')}" target="_blank" rel="noopener"><b>${esc(t.user?.name || 'you')}</b></a></span></div>
         <p>Episodes you watch past 85% update your ${t.name} list.</p>
         <div><button class="btn small ghost danger" data-disconnect="${key}" type="button">Disconnect</button></div>`;
+    } else if (t.unavailable) {
+      body = `<p>${esc(t.unavailable)}</p>`;
+    } else if (t.needsClientId) {
+      body = `<p>AniList needs a free app registration once. On <a href="https://anilist.co/settings/developer" target="_blank" rel="noopener">AniList → Developer</a>, create a client with this redirect URL:</p>
+        <p><code>${esc(t.redirect)}</code></p>
+        <form id="anilist-client-form">
+          <label class="field">Client ID<input id="anilist-client-id" inputmode="numeric" autocomplete="off" required placeholder="12345"></label>
+          <div><button class="btn small primary" type="submit">Save and continue</button></div>
+        </form>`;
     } else if (key === 'kitsu') {
       body = `<p>Sign in with your Kitsu account. Akari keeps the access token and never stores your password.</p>
         <form id="kitsu-form">
@@ -481,14 +507,15 @@ async function settingsPage() {
       body = `<p>Register an app with ${t.name}, then add ${t.setup.map((v) => `<code>${v}</code>`).join(' and ')} to <code>.env</code> and restart Akari.</p>
         <p>Redirect URL to register: <code>${esc(t.redirect)}</code></p>`;
     } else {
-      body = `<p>You'll sign in on ${t.name} and come straight back here.</p><div><a class="btn small primary" href="/auth/${key}">Connect ${t.name}</a></div>`;
+      body = `<p>You'll sign in on ${t.name} and come straight back here.</p><div><a class="btn small primary" href="${esc(t.authUrl)}">Connect ${t.name}</a></div>`;
     }
     return `<div class="tracker"><div class="tracker-top"><h3>${t.name}</h3><span class="chip ${t.connected ? 'completed' : ''}">${t.connected ? 'Connected' : 'Not connected'}</span></div>${body}</div>`;
   };
 
   view(`<div class="wrap">
     <div class="page-head"><span class="eyebrow">Settings</span><h1>Sources and trackers</h1>
-      <p>Your library is built from GitHub repos. Your watch history syncs to the anime trackers you connect.</p></div>
+      <p>Your library is built from GitHub repos. Your watch history syncs to the anime trackers you connect.</p>
+      ${STATIC ? '<p>This web version reads public repos only and keeps your sources, progress and sign-ins in this browser.</p>' : ''}</div>
     <div class="settings">
       <section aria-labelledby="h-src">
         <h2 id="h-src">GitHub sources</h2>
@@ -529,7 +556,7 @@ async function settingsPage() {
     const btn = e.submitter; btn.disabled = true; btn.textContent = 'Reading repo…';
     try {
       const s = await api('/api/sources', { method: 'POST', body: { repo: $('#src-repo').value, path: $('#src-path').value } });
-      toast(`Added ${s.repo}: ${s.shows} shows, ${s.episodes} episodes.`, 'ok');
+      toast(`Added ${s.repo}: ${plural(s.shows, 'show')}, ${plural(s.episodes, 'episode')}.`, 'ok');
       catalog = null;
       settingsPage();
     } catch (err) {
@@ -561,6 +588,13 @@ async function settingsPage() {
     catalog = null;
     settingsPage();
   }));
+  $('#anilist-client-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    try {
+      await api('/api/trackers/anilist/client', { method: 'POST', body: { clientId: $('#anilist-client-id').value } });
+      settingsPage();
+    } catch (err) { toast(err.message, 'error'); }
+  });
   $('#kitsu-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
     const btn = e.submitter; btn.disabled = true;
@@ -576,5 +610,5 @@ async function settingsPage() {
 const qs = new URLSearchParams(location.search);
 if (qs.has('connected')) toast(`Connected ${TRACKER_NAME[qs.get('connected')] || qs.get('connected')}.`, 'ok');
 if (qs.has('auth_error')) toast(qs.get('auth_error'), 'error');
-if ([...qs].length) history.replaceState(null, '', `/${location.hash}`);
+if ([...qs].length) history.replaceState(null, '', `${location.pathname}${location.hash}`);
 route();

@@ -86,6 +86,18 @@ Set `PUBLIC_URL` to the address you open Akari at first, because redirect URLs a
 
 **Kitsu**: no app needed. Sign in from Settings with your Kitsu email and password. Akari stores the access token, not the password. If Kitsu's API moves, change `KITSU_API_BASE`.
 
+## Web version (GitHub Pages)
+
+`npm run build:pages` builds a browser-only copy of Akari into `dist/`, published from the `gh-pages` branch. It needs no server, with these limits:
+
+- Public GitHub repos only.
+- AniList: each visitor registers a free AniList client once (redirect URL = the site's address) and pastes its client ID in Settings. To skip that for everyone, build with `ANILIST_CLIENT_ID_WEB=<id> npm run build:pages`.
+- Kitsu: works if Kitsu allows sign-in from other sites; otherwise use the server version.
+- MyAnimeList: not available, because its API blocks calls from web pages on other sites.
+- Sources, watch progress and sign-ins are stored in that browser only.
+
+To publish an update: `npm run build:pages`, then push the contents of `dist/` to the `gh-pages` branch.
+
 ## Running on a server
 
 - Set `HOST=0.0.0.0`, `PUBLIC_URL=https://your.domain`, and **`APP_PASSWORD`**. Akari is single-user: anyone who can open it can change your tracker lists.
@@ -103,6 +115,8 @@ lib/manifest.js      Manifest validation
 lib/anilist.js       AniList GraphQL + metadata cache
 lib/trackers.js      AniList, MyAnimeList and Kitsu auth and list sync
 public/              The front end (no build step)
+web/static-backend.js  Browser stand-in for the server, used by the Pages build
+scripts/build-pages.js Builds dist/ for GitHub Pages
 sources/sample/      Bundled open-movie source
 source-template/     A starting manifest for your own repo
 ```
